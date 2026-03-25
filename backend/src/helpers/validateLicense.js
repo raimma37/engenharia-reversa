@@ -200,7 +200,7 @@ function licencaMiddleware(req, res, next) {
     if (!licencaValida) {
         return res.status(503).json({
             error: 'Licença inválida ou expirada. Entre em contato com o suporte.',
-            contact: process.env.SUPPORT_EMAIL || 'suporte@seupainel.com',
+            contact: process.env.SUPPORT_EMAIL || 'contato@botconnecta.com.br',
         });
     }
 
