@@ -126,8 +126,8 @@ const VersionControl = () => {
               <InfoIcon />
             </div>
             <Typography variant="body2">
-              <strong>Nova versão {packageVersion} disponível!</strong>
-              {" Clique em atualizar para obter as últimas melhorias."}
+              <strong>Nova versão <span style={{ color: "yellow" }}>{packageVersion}</span> disponível!<br></br></strong>
+              {" Clique em atualizar para obter as últimas melhorias do sistema."}
             </Typography>
           </Box>
           <Box display="flex" gap={1} alignItems="center" ml={2}>
@@ -152,7 +152,7 @@ const VersionControl = () => {
             )}
           </Box>
         </Paper>
-      </Fade>
+      </Fade >
     </>
   );
 };
