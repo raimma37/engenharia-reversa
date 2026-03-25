@@ -1,0 +1,159 @@
+/* Adicione as regras CSS para ocultar os ícones */
+.event-container {
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  width: 100%;
+  min-height: 30px;
+  gap: 8px;
+}
+
+.event-container>div:first-child {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delete-icon,
+.edit-icon {
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 10;
+  cursor: pointer;
+  font-size: 18px !important;
+  flex-shrink: 0;
+}
+
+.event-container:hover .delete-icon,
+.event-container:hover .edit-icon {
+  opacity: 1;
+}
+
+/* Estilos para o calendário em tela cheia */
+.rbc-calendar {
+  min-height: 100%;
+  height: 100%;
+}
+
+.rbc-month-view,
+.rbc-time-view,
+.rbc-agenda-view {
+  min-height: 100%;
+}
+
+.rbc-time-content {
+  overflow-y: auto;
+}
+
+/* Melhorias para visualização em semana */
+.rbc-time-slot {
+  min-height: 40px !important;
+}
+
+.rbc-event {
+  padding: 4px 6px !important;
+  border-radius: 4px !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  min-height: 30px !important;
+  margin: 0px 0px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12) !important;
+  z-index: 5 !important;
+}
+
+.rbc-event:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2) !important;
+  z-index: 15 !important;
+  transform: scale(1.02);
+  transition: all 0.2s ease;
+}
+
+.rbc-event-content {
+  width: 100%;
+  overflow: visible !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+.rbc-event-label {
+  display: none;
+}
+
+/* Ajuste de largura dos eventos sobrepostos */
+.rbc-events-container {
+  margin-right: 8px !important;
+}
+
+.rbc-day-slot .rbc-event {
+  min-width: 120px !important;
+}
+
+/* Melhorar o espaçamento das colunas */
+.rbc-time-column {
+  min-width: 80px !important;
+}
+
+.rbc-day-slot {
+  min-width: 150px !important;
+}
+
+/* Ajustar altura das linhas de hora */
+.rbc-timeslot-group {
+  min-height: 80px !important;
+}
+
+/* Melhorar visualização do texto nos eventos */
+.rbc-event-content span {
+  line-height: 1.4;
+  display: block;
+}
+
+/* Garantir que eventos não fiquem muito comprimidos */
+.rbc-addons-dnd .rbc-event {
+  min-height: 35px !important;
+}
+
+/* Ajustar os overlaps de eventos */
+.rbc-row-segment {
+  padding: 1px 2px !important;
+}
+
+/* Configuração para visualização mensal */
+.rbc-month-view .rbc-row-content {
+  overflow: visible !important;
+}
+
+.rbc-month-view .rbc-row {
+  overflow: visible !important;
+}
+
+.rbc-month-view .rbc-event {
+  margin: 2px 4px !important;
+  min-height: 26px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+/* Estilizar o link "+X mais" */
+.rbc-show-more {
+  background-color: #1976d2;
+  color: white !important;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  margin: 2px;
+  text-align: center;
+  transition: all 0.3s ease;
+  font-size: 12px;
+  display: block;
+}
+
+.rbc-show-more:hover {
+  background-color: #1565c0;
+  transform: scale(1.05);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
