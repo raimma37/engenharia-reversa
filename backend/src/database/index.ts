@@ -68,6 +68,10 @@ import CompanyKanbanConfig from "../models/CompanyKanbanConfig";
 import Floup from "../models/Floup";
 import FloupSchedule from "../models/FloupSchedule";
 import InstallationLog from "../models/InstallationLog";
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const AIAgent = require("../models/AIAgent").default;
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const AIAgentKnowledge = require("../models/AIAgentKnowledge").default;
 
 // eslint-disable-next-line
 const dbConfig = require("../config/database");
@@ -144,6 +148,8 @@ const models = [
   , PushSubscription
   , InteractiveMessageTemplate
   , PasswordResetToken
+  , AIAgent
+  , AIAgentKnowledge
 ];
 
 sequelize.addModels(models);

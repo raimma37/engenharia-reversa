@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": false,
+    "strictPropertyInitialization": false,
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "@whiskeysockets/baileys": [
+        "src/compat/baileys"
+      ],
+      "@whiskeysockets/baileys/*": [
+        "node_modules/@itsukichan/baileys/*"
+      ]
+    }
+  },
+  "exclude": [
+    "public"
+  ]
+}

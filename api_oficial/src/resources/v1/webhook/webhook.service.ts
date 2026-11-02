@@ -38,7 +38,7 @@ export class WebhookService {
     private readonly redis: RedisService,
     private readonly socket: SocketService,
     private readonly meta: MetaService,
-  ) {}
+  ) { }
 
   /**
    * Função auxiliar para serializar objetos com segurança,
@@ -51,9 +51,9 @@ export class WebhookService {
       return JSON.stringify(safeCopy);
     } catch (error: any) {
       this.logger.error(`Erro ao serializar objeto: ${error.message}`);
-      return JSON.stringify({ 
+      return JSON.stringify({
         error: 'Failed to stringify object',
-        type: typeof obj 
+        type: typeof obj
       });
     }
   }
@@ -98,11 +98,11 @@ export class WebhookService {
         const result = arraySlice.map((item) =>
           this.createSafeCopy(item, maxDepth, currentDepth + 1, seen),
         );
-        
+
         if (obj.length > maxArrayLength) {
           result.push(`[Array truncated: ${obj.length - maxArrayLength} more items]`);
         }
-        
+
         return result;
       }
 
@@ -278,23 +278,28 @@ export class WebhookService {
             if (change.field == 'messages') {
               const { value } = change;
 
-              if (value?.statuses != null) {
-                this.logger.log('Webhook recebido (status):', {
-                  companyId,
-                  statuses: value.statuses.map((s) => ({
-                    id: s.id,
-                    status: s.status,
-                  })),
-                });
+              if (value?.statuses != null && value.statuses.length > 0) {
                 for (const status of value.statuses) {
+                  // Deduplicação: ignorar status já processados recentemente
+                  const dedupKey = `status:${companyId}:${status.id}:${status.status}`;
+                  const alreadyProcessed = await this.redis.get(dedupKey);
+                  if (alreadyProcessed) {
+                    this.logger.warn(`[DEDUP] Status ${status.status} para ${status.id} já processado, ignorando`);
+                    continue;
+                  }
+                  await this.redis.set(dedupKey, '1', 30); // TTL 30 segundos
+
+                  this.logger.log(`Webhook recebido (status): ${status.status} para mensagem ${status.id.slice(-10)}`);
                   this.socket.readMessage({
                     companyId: company.idEmpresaMult100,
                     messageId: status.id,
                     token: whats.token_mult100,
                   });
                 }
-              } else {
-                const contact = value.contacts[0];
+              }
+
+              if (value?.messages != null && value.messages.length > 0) {
+                const contact = value.contacts?.[0];
 
                 for (const message of value.messages) {
                   if (this.messagesPermitidas.some((m) => m == message.type)) {
@@ -358,10 +363,10 @@ export class WebhookService {
                     let idFile;
                     let bodyMessage;
                     let quoteMessageId;
-                    
+
                     // ✅ CORRIGIDO: Para evitar payloads gigantes no socket, enviamos URL da Meta
                     // em vez de base64 para vídeos e documentos. O backend baixa direto da Meta.
-                    
+
                     switch (message.type) {
                       case 'video':
                         idFile = message.video.id;

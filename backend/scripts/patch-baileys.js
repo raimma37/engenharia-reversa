@@ -203,3 +203,77 @@ for (const filePath of messagesRecvPaths) {
     }
   }
 }
+
+// ─── Patch 4: updateBlockStatus — formato correto do IQ stanza ───────────────
+// O fork usa tag:'item' com attrs.action, mas o protocolo WA v7 espera
+// tag:'block'|'unblock' diretamente, sem wrapper <list>.
+// Formato correto: content: [{ tag: action, attrs: { jid } }]
+const chatsPaths = [
+  path.join(__dirname, "..", "node_modules", "@itsukichan", "baileys", "lib", "Socket", "chats.js"),
+  path.join(__dirname, "..", "node_modules", "@whiskeysockets", "baileys", "lib", "Socket", "chats.js"),
+  path.join(__dirname, "..", "node_modules", "baileys", "lib", "Socket", "chats.js"),
+];
+
+const badBlockIq = `content: [
+                {
+                    tag: 'item',
+                    attrs: {
+                        action,
+                        jid
+                    }
+                }
+            ]`;
+
+const fixedBlockIq = `content: [
+                {
+                    tag: action,
+                    attrs: {
+                        jid
+                    }
+                }
+            ]`;
+
+for (const filePath of chatsPaths) {
+  if (!fs.existsSync(filePath)) continue;
+  let content = fs.readFileSync(filePath, "utf-8");
+  if (content.includes(fixedBlockIq)) {
+    console.log("✅ [PATCH-BAILEYS] updateBlockStatus fix já aplicado em: " + filePath);
+    continue;
+  }
+  if (content.includes(badBlockIq)) {
+    content = content.replace(badBlockIq, fixedBlockIq);
+    fs.writeFileSync(filePath, content, "utf-8");
+    console.log("✅ [PATCH-BAILEYS] updateBlockStatus fix aplicado em: " + filePath);
+  } else {
+    console.warn("⚠️  [PATCH-BAILEYS] updateBlockStatus — padrão não encontrado em: " + filePath);
+  }
+}
+
+// ─── Patch 5: fetchProps bad-request não fatal em executeInitQueries ──────────
+// O WhatsApp às vezes rejeita a query fetchProps com bad-request.
+// Promise.all derruba todas as init queries. Tornamos fetchProps não-fatal.
+for (const filePath of chatsPaths) {
+  if (!fs.existsSync(filePath)) continue;
+  let content = fs.readFileSync(filePath, "utf-8");
+
+  const alreadyPatched = content.includes("fetchProps().catch(");
+  if (alreadyPatched) {
+    console.log("✅ [PATCH-BAILEYS] fetchProps non-fatal fix já aplicado em: " + filePath);
+    continue;
+  }
+
+  // Substitui fetchProps() por fetchProps().catch(...)  dentro de Promise.all
+  const patched = content.replace(
+    /(\bawait\s+Promise\.all\s*\(\s*\[[\s\S]*?)(fetchProps\s*\(\s*\))([\s\S]*?\]\s*\))/g,
+    (match, before, call, after) => {
+      return before + `fetchProps().catch(e => { logger && logger.warn({ err: e }, '[PATCH5] fetchProps falhou, continuando init'); })` + after;
+    }
+  );
+
+  if (patched !== content) {
+    fs.writeFileSync(filePath, patched, "utf-8");
+    console.log("✅ [PATCH-BAILEYS] fetchProps non-fatal fix aplicado em: " + filePath);
+  } else {
+    console.warn("⚠️  [PATCH-BAILEYS] fetchProps — padrão não encontrado em: " + filePath);
+  }
+}

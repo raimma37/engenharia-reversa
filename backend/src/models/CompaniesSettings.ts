@@ -131,6 +131,17 @@ class CompaniesSettings extends Model<CompaniesSettings> {
 
   @Column
   motivosFinalizacao: string; // JSON string com array de motivos padrão
+
+  @Default("disabled")
+  @Column
+  aiAutoSummary: string;
+
+  @Default("disabled")
+  @Column
+  aiSuggestResponse: string;
+
+  @Column
+  copyContactPrefix: string;
 }
 
 export default CompaniesSettings;

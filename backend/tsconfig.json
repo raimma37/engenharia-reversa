@@ -4,6 +4,7 @@
     "module": "CommonJS",
     "moduleResolution": "Node",
     "outDir": "./dist",
+    "rootDir": "./src",
     "strict": false,
     "strictPropertyInitialization": false,
     "esModuleInterop": true,
@@ -11,11 +12,24 @@
     "emitDecoratorMetadata": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
+    "allowJs": true,
     "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "paths": {
-      "@whiskeysockets/baileys": ["src/compat/baileys"],
-      "@whiskeysockets/baileys/*": ["node_modules/@itsukichan/baileys/*"]
+      "@whiskeysockets/baileys": [
+        "src/compat/baileys"
+      ],
+      "@whiskeysockets/baileys/*": [
+        "node_modules/@itsukichan/baileys/*"
+      ]
     }
   },
-  "exclude": ["public"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "public"
+  ]
 }

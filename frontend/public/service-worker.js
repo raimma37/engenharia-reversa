@@ -1,5 +1,5 @@
-// Service Worker para Web Push Notifications - MultiFLOW
-const CACHE_NAME = 'multiflow-v1';
+// Service Worker para Web Push Notifications - BotConnecta
+const CACHE_NAME = 'botconnecta-v1';
 
 // Instalação do Service Worker
 self.addEventListener('install', (event) => {
@@ -18,7 +18,7 @@ self.addEventListener('push', (event) => {
   console.log('[SW] Push recebido:', event);
 
   let data = {
-    title: 'MultiFLOW',
+    title: 'BotConnecta',
     body: 'Nova mensagem recebida',
     icon: '/android-chrome-192x192.png',
     badge: '/favicon-32x32.png',

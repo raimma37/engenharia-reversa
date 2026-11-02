@@ -31,6 +31,9 @@ class Invoices extends Model<Invoices> {
     detail: string;
 
     @Column
+    txid: string;
+
+    @Column
     status: string;
 
     @Column

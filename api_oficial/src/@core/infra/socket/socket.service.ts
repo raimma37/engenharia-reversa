@@ -28,7 +28,7 @@ export class SocketService implements OnModuleDestroy {
 
   private logger: Logger = new Logger(`${SocketService.name}`);
 
-  constructor() {}
+  constructor() { }
 
   onModuleDestroy() {
     // Limpa todas as conexões ao destruir o módulo
@@ -223,15 +223,13 @@ export class SocketService implements OnModuleDestroy {
 
           if (item.type === 'message') {
             const data = item.data as IReceivedWhatsppOficial;
-            
+
             this.logger.warn(
               `📤 [${processedCount + 1}] Enviando mensagem para o websocket da empresa ${companyId}`,
             );
 
-            console.log('data', JSON.stringify(data, null, 2));
-
             socket.emit('receivedMessageWhatsAppOficial', data);
-            
+
             this.logger.log(`✅ Mensagem emitida com sucesso para empresa ${companyId}`);
           } else if (item.type === 'read') {
             const data = item.data as IReceivedWhatsppOficialRead;
@@ -241,7 +239,7 @@ export class SocketService implements OnModuleDestroy {
             );
 
             socket.emit('readMessageWhatsAppOficial', data);
-            
+
             this.logger.log(`✅ Evento de leitura emitido com sucesso para empresa ${companyId}`);
           }
 

@@ -62,6 +62,12 @@ class Prompt extends Model<Prompt> {
   @Column
   voiceRegion:string;
 
+  @Column({ defaultValue: "ambos" })
+  voiceMode: string;
+
+  @Column({ defaultValue: "texto" })
+  voicePriority: string;
+
   @AllowNull
   @ForeignKey(() => Queue)
   @Column

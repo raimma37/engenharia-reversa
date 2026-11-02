@@ -84,6 +84,10 @@ class User extends Model<User> {
   @Column
   lastSeen: Date;
 
+  @Default(null)
+  @Column
+  sessionId: string;
+
   @Default("00:00")
   @Column
   startWork: string;

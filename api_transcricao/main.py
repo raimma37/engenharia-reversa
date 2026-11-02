@@ -371,5 +371,6 @@ def transcrever():
         return {'erro': f'Erro interno no servidor: {str(e)}'}, 500
 
 if __name__ == '__main__':
-    logging.info(f"Servidor iniciado na porta 4002")
-    app.run(host='0.0.0.0', port=4002, debug=True)
+    port = int(os.environ.get('PORT', 4002))
+    logging.info(f"Servidor iniciado na porta {port}")
+    app.run(host='0.0.0.0', port=port, debug=False)

@@ -57,6 +57,8 @@ import pushNotificationRoutes from "./pushNotificationRoutes";
 import n8nCallbackRoutes from "./n8nCallbackRoutes";
 import interactiveTemplateRoutes from "./interactiveTemplateRoutes";
 import interactiveRoutes from "./interactiveRoutes";
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const aiAgentRoutes = require("./aiAgentRoutes").default;
 
 import ChatController from "../controllers/ChatController";
 
@@ -125,6 +127,7 @@ routes.use(pushNotificationRoutes);
 routes.use(n8nCallbackRoutes);
 routes.use(interactiveTemplateRoutes);
 routes.use(interactiveRoutes);
+routes.use(aiAgentRoutes);
 
 routes.post("/chats/backfill", ChatController.backfillChats);
 

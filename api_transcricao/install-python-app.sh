@@ -12,12 +12,13 @@ carregar_variaveis() {
   if [ -f "$ARQUIVO_VARIAVEIS" ]; then
     source "$ARQUIVO_VARIAVEIS"
   else
-    empresa="multiflow"
+    empresa="botconnecta" # Valor padrão se o arquivo não existir
+    echo "⚠️  Arquivo de variáveis não encontrado. Usando valor padrão para empresa: $empresa"
   fi
 }
 carregar_variaveis
 
-CAMINHO_API="/home/deploy/${empresa:-multiflow}/api_transcricao/main.py"
+CAMINHO_API="/home/deploy/${empresa:-botconnecta}/api_transcricao/main.py"
 APP_NAME="api_transcricao"
 
 # Atualizar pacotes
@@ -71,8 +72,17 @@ else
   sudo apt install -y flac
 fi
 
-# Instalar dependências do Python
-pip3 install flask SpeechRecognition pydub ffmpeg-python python-dotenv
+# Instalar dependências do Python (compatível com Ubuntu 22.04 / 24.04 / 26.04 PEP 668 e Python 3.13+)
+API_DIR="$(dirname "$CAMINHO_API")"
+if [ -d "$API_DIR" ]; then
+  cd "$API_DIR"
+  python3 -m venv venv
+  ./venv/bin/pip install --upgrade pip
+  ./venv/bin/pip install -r requirements.txt
+else
+  pip3 install --break-system-packages flask SpeechRecognition pydub ffmpeg-python python-dotenv requests standard-aifc audioop-lts legacy-cgi || \
+  pip3 install flask SpeechRecognition pydub ffmpeg-python python-dotenv requests
+fi
 
 # Instalar PM2 (se não tiver)
 if command -v pm2 &>/dev/null; then
