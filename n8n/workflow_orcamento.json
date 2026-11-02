@@ -1,0 +1,1172 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "node-1",
+      "name": "A Cada 5 Minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        220,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whaticket-integration",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "node-webhook",
+      "name": "Webhook do Whaticket",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        220,
+        400
+      ],
+      "webhookId": "c92d5395-8a21-4d37-8848-3563914a5b48"
+    },
+    {
+      "parameters": {
+        "url": "https://pdv.saojoao.net/api/orcamentos?status=a_enviar",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer TYPEBOT_GRAFIKA_KEY_2026"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-2",
+      "name": "Listar Pendentes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        440,
+        300
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://pdv.saojoao.net/api/orcamentos/' + $json.id + '/export' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer TYPEBOT_GRAFIKA_KEY_2026"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-3",
+      "name": "Exportar PDF da API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        660,
+        300
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/api/sendFile",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "grafica123"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chatId: $json.chatId, session: \"default\", file: { mimetype: \"application/pdf\", filename: \"orcamento.pdf\", data: $('Exportar PDF da API').item.json.pdf_base64 }, caption: \"Olá \" + $('Exportar PDF da API').item.json.cliente.nome + \", segue o seu orçamento da Gráfica São João em anexo! Podemos seguir com o pedido?\" }) }}",
+        "options": {}
+      },
+      "id": "node-5",
+      "name": "Enviar pelo WAHA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1760,
+        100
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://pdv.saojoao.net/api/orcamentos/' + $('Exportar PDF da API').item.json.orcamento.id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer TYPEBOT_GRAFIKA_KEY_2026"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"status\": \"enviado\"\n}",
+        "options": {}
+      },
+      "id": "node-6",
+      "name": "Avisar Sistema",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1980,
+        100
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ 'http://localhost:8080/api/contacts/check-exists?session=default&phone=' + ('55' + String($('Exportar PDF da API').item.json.cliente.telefone).replace(/\\D/g, '')) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "grafica123"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-4",
+      "name": "Resolver Numero WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1100,
+        300
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Confere se o orçamento tem as informações mínimas para enviar\nconst e = $json || {};\nconst falta = [];\nconst tel = String((e.cliente && e.cliente.telefone) || '').replace(/\\D/g, '');\nif (!e.cliente || !e.cliente.nome) falta.push('nome do cliente');\nif (tel.length < 10) falta.push('telefone do cliente (inválido ou vazio: \"' + ((e.cliente && e.cliente.telefone) || '') + '\")');\nif (!e.pdf_base64) falta.push('PDF do orçamento (pdf_base64 vazio)');\nif (!e.orcamento || !e.orcamento.id) falta.push('id do orçamento');\nif (falta.length) return { json: { ok: false, erro: 'Informações faltando: ' + falta.join(', ') } };\nreturn { json: Object.assign({}, e, { ok: true }) };"
+      },
+      "id": "node-v1",
+      "name": "Validar Dados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "node-i1c",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-i1",
+      "name": "Dados OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Confere se o número existe no WhatsApp\nconst r = $json || {};\nconst existe = r.numberExists === true || r.numberExists === 'true';\nif (!existe || !r.chatId) return { json: { ok: false, erro: 'O número do cliente não existe no WhatsApp ou não foi possível resolvê-lo.' } };\nreturn { json: Object.assign({}, r, { ok: true }) };"
+      },
+      "id": "node-v2",
+      "name": "Validar Numero",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "node-i2c",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-i2",
+      "name": "Numero OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Guarda o id da mensagem enviada e os dados do contato\nconst r = $('Enviar pelo WAHA').item.json;\nconst id = (r.id && (r.id._serialized || r.id.id)) ? (r.id._serialized || r.id.id) : (r.id || (r._data && r._data.id && r._data.id._serialized) || '');\nconst chatId = $('Resolver Numero WhatsApp').item.json.chatId;\nconst e = $('Exportar PDF da API').item.json;\nconst nome = (e.cliente && e.cliente.nome) || chatId.replace('@c.us', '');\n// Marca o chat como \"aguardando resposta do orçamento\" (usado pelo agente de aceite)\nconst sd = $getWorkflowStaticData('global');\nsd.aguardando = sd.aguardando || {};\nsd.aguardando[chatId] = { orcamentoId: e.orcamento.id, numero: e.orcamento.numero || '', nome, telefone: chatId.replace('@c.us', ''), ts: Date.now() };\nreturn { json: { messageId: String(id), chatId, nome } };"
+      },
+      "id": "node-7",
+      "name": "Extrair ID da Mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 8,
+        "unit": "seconds"
+      },
+      "id": "node-8",
+      "name": "Aguardar Entrega",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1980,
+        300
+      ],
+      "webhookId": "orcamento-wait-entrega"
+    },
+    {
+      "parameters": {
+        "url": "={{ 'http://localhost:8080/api/default/chats/' + encodeURIComponent($('Extrair ID da Mensagem').item.json.chatId) + '/messages/' + encodeURIComponent($('Extrair ID da Mensagem').item.json.messageId) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "grafica123"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-9",
+      "name": "Consultar Status da Mensagem",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2200,
+        300
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ack >= 2: entregue ao aparelho do cliente (3/4: lida/ouvida)\nconst ack = Number(($json || {}).ack);\nconst nome = $('Extrair ID da Mensagem').item.json.nome;\nconst entregue = ack >= 2;\nconst texto = entregue\n  ? 'Orçamento enviado para ' + nome + ' com sucesso ✅'\n  : '⚠️ Orçamento enviado para ' + nome + ', mas o WhatsApp ainda não confirmou a entrega. Confira com o cliente.';\nreturn { json: { entregue, texto } };"
+      },
+      "id": "node-10",
+      "name": "Montar Aviso",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/api/sendText",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "grafica123"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ session: \"default\", chatId: \"5591981284851@c.us\", text: $json.texto }) }}",
+        "options": {}
+      },
+      "id": "node-11",
+      "name": "Avisar Dono",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/api/sendText",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "grafica123"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ session: \"default\", chatId: \"5591981284851@c.us\", text: $json.texto }) }}",
+        "options": {}
+      },
+      "id": "node-12",
+      "name": "Avisar Dono (Erro)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1760,
+        800
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Monta o aviso de erro (etapa: Buscar orçamentos pendentes no sistema)\nconst j = $json || {};\nlet motivo = j.erro;\nif (!motivo && j.error) {\n  const er = j.error;\n  motivo = typeof er === 'string' ? er : [er.message, er.description, er.httpCode ? '(HTTP ' + er.httpCode + ')' : ''].filter(Boolean).join(' ');\n}\nif (!motivo) motivo = JSON.stringify(j).slice(0, 300);\nlet quem = '';\ntry { const x = $('Exportar PDF da API').item.json; quem = (x.orcamento && x.orcamento.numero ? ' | Orçamento ' + x.orcamento.numero : '') + (x.cliente && x.cliente.nome ? ' | Cliente: ' + x.cliente.nome : ''); } catch (e) {}\nreturn { json: { texto: '❌ Falha no envio de orçamento' + quem + '\\nEtapa: Buscar orçamentos pendentes no sistema\\nMotivo: ' + motivo } };"
+      },
+      "id": "node-err-0",
+      "name": "Erro: Listar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Monta o aviso de erro (etapa: Exportar PDF do orçamento)\nconst j = $json || {};\nlet motivo = j.erro;\nif (!motivo && j.error) {\n  const er = j.error;\n  motivo = typeof er === 'string' ? er : [er.message, er.description, er.httpCode ? '(HTTP ' + er.httpCode + ')' : ''].filter(Boolean).join(' ');\n}\nif (!motivo) motivo = JSON.stringify(j).slice(0, 300);\nlet quem = '';\ntry { const x = $('Exportar PDF da API').item.json; quem = (x.orcamento && x.orcamento.numero ? ' | Orçamento ' + x.orcamento.numero : '') + (x.cliente && x.cliente.nome ? ' | Cliente: ' + x.cliente.nome : ''); } catch (e) {}\nreturn { json: { texto: '❌ Falha no envio de orçamento' + quem + '\\nEtapa: Exportar PDF do orçamento\\nMotivo: ' + motivo } };"
+      },
+      "id": "node-err-1",
+      "name": "Erro: Exportar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        690
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Monta o aviso de erro (etapa: Validar dados do orçamento)\nconst j = $json || {};\nlet motivo = j.erro;\nif (!motivo && j.error) {\n  const er = j.error;\n  motivo = typeof er === 'string' ? er : [er.message, er.description, er.httpCode ? '(HTTP ' + er.httpCode + ')' : ''].filter(Boolean).join(' ');\n}\nif (!motivo) motivo = JSON.stringify(j).slice(0, 300);\nlet quem = '';\ntry { const x = $('Exportar PDF da API').item.json; quem = (x.orcamento && x.orcamento.numero ? ' | Orçamento ' + x.orcamento.numero : '') + (x.cliente && x.cliente.nome ? ' | Cliente: ' + x.cliente.nome : ''); } catch (e) {}\nreturn { json: { texto: '❌ Falha no envio de orçamento' + quem + '\\nEtapa: Validar dados do orçamento\\nMotivo: ' + motivo } };"
+      },
+      "id": "node-err-2",
+      "name": "Erro: Dados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        780
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Monta o aviso de erro (etapa: Resolver número no WhatsApp)\nconst j = $json || {};\nlet motivo = j.erro;\nif (!motivo && j.error) {\n  const er = j.error;\n  motivo = typeof er === 'string' ? er : [er.message, er.description, er.httpCode ? '(HTTP ' + er.httpCode + ')' : ''].filter(Boolean).join(' ');\n}\nif (!motivo) motivo = JSON.stringify(j).slice(0, 300);\nlet quem = '';\ntry { const x = $('Exportar PDF da API').item.json; quem = (x.orcamento && x.orcamento.numero ? ' | Orçamento ' + x.orcamento.numero : '') + (x.cliente && x.cliente.nome ? ' | Cliente: ' + x.cliente.nome : ''); } catch (e) {}\nreturn { json: { texto: '❌ Falha no envio de orçamento' + quem + '\\nEtapa: Resolver número no WhatsApp\\nMotivo: ' + motivo } };"
+      },
+      "id": "node-err-3",
+      "name": "Erro: Resolver",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        870
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Monta o aviso de erro (etapa: Validar número no WhatsApp)\nconst j = $json || {};\nlet motivo = j.erro;\nif (!motivo && j.error) {\n  const er = j.error;\n  motivo = typeof er === 'string' ? er : [er.message, er.description, er.httpCode ? '(HTTP ' + er.httpCode + ')' : ''].filter(Boolean).join(' ');\n}\nif (!motivo) motivo = JSON.stringify(j).slice(0, 300);\nlet quem = '';\ntry { const x = $('Exportar PDF da API').item.json; quem = (x.orcamento && x.orcamento.numero ? ' | Orçamento ' + x.orcamento.numero : '') + (x.cliente && x.cliente.nome ? ' | Cliente: ' + x.cliente.nome : ''); } catch (e) {}\nreturn { json: { texto: '❌ Falha no envio de orçamento' + quem + '\\nEtapa: Validar número no WhatsApp\\nMotivo: ' + motivo } };"
+      },
+      "id": "node-err-4",
+      "name": "Erro: Número",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Monta o aviso de erro (etapa: Enviar PDF pelo WhatsApp (WAHA))\nconst j = $json || {};\nlet motivo = j.erro;\nif (!motivo && j.error) {\n  const er = j.error;\n  motivo = typeof er === 'string' ? er : [er.message, er.description, er.httpCode ? '(HTTP ' + er.httpCode + ')' : ''].filter(Boolean).join(' ');\n}\nif (!motivo) motivo = JSON.stringify(j).slice(0, 300);\nlet quem = '';\ntry { const x = $('Exportar PDF da API').item.json; quem = (x.orcamento && x.orcamento.numero ? ' | Orçamento ' + x.orcamento.numero : '') + (x.cliente && x.cliente.nome ? ' | Cliente: ' + x.cliente.nome : ''); } catch (e) {}\nreturn { json: { texto: '❌ Falha no envio de orçamento' + quem + '\\nEtapa: Enviar PDF pelo WhatsApp (WAHA)\\nMotivo: ' + motivo } };"
+      },
+      "id": "node-err-5",
+      "name": "Erro: Enviar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        1050
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Monta o aviso de erro (etapa: Agente de IA (aceite do orçamento))\nconst j = $json || {};\nlet motivo = j.erro;\nif (!motivo && j.error) {\n  const er = j.error;\n  motivo = typeof er === 'string' ? er : [er.message, er.description, er.httpCode ? '(HTTP ' + er.httpCode + ')' : ''].filter(Boolean).join(' ');\n}\nif (!motivo) motivo = JSON.stringify(j).slice(0, 300);\nlet quem = '';\ntry { const x = $('Exportar PDF da API').item.json; quem = (x.orcamento && x.orcamento.numero ? ' | Orçamento ' + x.orcamento.numero : '') + (x.cliente && x.cliente.nome ? ' | Cliente: ' + x.cliente.nome : ''); } catch (e) {}\nreturn { json: { texto: '❌ Falha no envio de orçamento' + quem + '\\nEtapa: Agente de IA (aceite do orçamento)\\nMotivo: ' + motivo } };"
+      },
+      "id": "node-err-6",
+      "name": "Erro: Agente",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        1140
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Monta o aviso de erro (etapa: Atualizar status no sistema (o PDF JÁ FOI enviado ao cliente; o orçamento pode ser reenviado em 5 min))\nconst j = $json || {};\nlet motivo = j.erro;\nif (!motivo && j.error) {\n  const er = j.error;\n  motivo = typeof er === 'string' ? er : [er.message, er.description, er.httpCode ? '(HTTP ' + er.httpCode + ')' : ''].filter(Boolean).join(' ');\n}\nif (!motivo) motivo = JSON.stringify(j).slice(0, 300);\nlet quem = '';\ntry { const x = $('Exportar PDF da API').item.json; quem = (x.orcamento && x.orcamento.numero ? ' | Orçamento ' + x.orcamento.numero : '') + (x.cliente && x.cliente.nome ? ' | Cliente: ' + x.cliente.nome : ''); } catch (e) {}\nreturn { json: { texto: '❌ Falha no envio de orçamento' + quem + '\\nEtapa: Atualizar status no sistema (o PDF JÁ FOI enviado ao cliente; o orçamento pode ser reenviado em 5 min)\\nMotivo: ' + motivo } };"
+      },
+      "id": "node-err-7",
+      "name": "Erro: Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        1230
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "orcamento-resposta",
+        "options": {}
+      },
+      "id": "node-r1",
+      "name": "Webhook Resposta do Cliente",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        1100
+      ],
+      "webhookId": "orcamento-resposta-cliente"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Só trata mensagens de clientes que estão aguardando resposta de um orçamento (compatível com Whaticket e WAHA)\nconst raw = $input.first().json.body || $input.first().json;\nconst sd = $getWorkflowStaticData('global');\nsd.aguardando = sd.aguardando || {};\nconst p = raw.payload || {};\nconst baileysMsg = raw.message || {};\nconst ev = raw.event || (raw.key ? 'message' : '');\nconst fromMe = Boolean((raw.key && raw.key.fromMe) ?? p.fromMe);\nconst nao = [{ json: { ok: false, responder: false } }];\nif (ev !== 'message') return nao;\nif (fromMe) return nao;\nconst rawFrom = String(p.from || (raw.key && raw.key.remoteJid) || '');\nconst chatId = rawFrom.replace('@s.whatsapp.net', '@c.us');\nif (!chatId || chatId.includes('@g.us') || chatId.includes('status@broadcast')) return nao;\nconst ag = sd.aguardando[chatId] || sd.aguardando[rawFrom];\nif (!ag) return nao;\nif (Date.now() - ag.ts > 7 * 24 * 3600 * 1000) { delete sd.aguardando[chatId]; return nao; }\nconst mime = String((p.media && p.media.mimetype) || (p._data && p._data.mimetype) || (baileysMsg.audioMessage && baileysMsg.audioMessage.mimetype) || '');\nconst tp = String((p._data && p._data.type) || p.type || (baileysMsg.audioMessage ? 'ptt' : ''));\nlet text = String(p.body || baileysMsg.conversation || (baileysMsg.extendedTextMessage && baileysMsg.extendedTextMessage.text) || '').trim();\nif (mime.startsWith('audio') || tp === 'ptt' || tp === 'audio' || Boolean(baileysMsg.audioMessage)) text = '[Cliente enviou um áudio que não pode ser ouvido. Peça para escrever.]';\nelse if ((p.hasMedia || baileysMsg.imageMessage || baileysMsg.documentMessage) && !text) text = '[Cliente enviou um arquivo/imagem]';\nif (!text) return nao;\nreturn [{ json: { ok: true, responder: true, chatId, text, orcamentoId: ag.orcamentoId, numero: ag.numero, nome: ag.nome, telefone: ag.telefone } }];"
+      },
+      "id": "node-r2",
+      "name": "Filtrar Resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        1100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "node-r3c",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-r3",
+      "name": "Aguardando resposta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        1100
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "options": {
+          "systemMessage": "=Você é o assistente da Gráfica São João (Belém-PA) no WhatsApp. A equipe acabou de enviar o orçamento {{ $json.numero }} para o cliente {{ $json.nome }} e perguntou se podem seguir com o pedido. Sua única missão: descobrir se o cliente ACEITA ou NEGA o orçamento.\n\nRegras:\n- Mensagens curtas, naturais, de WhatsApp. Sem listas, sem markdown. Faça só UMA pergunta por mensagem.\n- Se o cliente aceitar claramente (ex.: \"pode fazer\", \"fechado\", \"aprovado\"), agradeça, diga que a equipe dará sequência e termine a mensagem com a tag [ACEITO].\n- Se o cliente negar (ex.: \"não quero\", \"achei caro\", \"vou pensar\" sem retorno), seja gentil, NÃO insista em vender e pergunte com delicadeza o motivo (preço, prazo, qualidade, achou outro lugar, desistiu do serviço etc.), se ele ainda não disse.\n- Quando o motivo da negação estiver claro (ou o cliente se recusar a explicar), agradeça e termine a mensagem com a tag [NEGADO: motivo resumido em poucas palavras]. Se ele não quis dizer, use [NEGADO: não informou o motivo].\n- Se estiver em dúvida (cliente pediu desconto, mudança, prazo ou mais informações), responda que vai repassar para a equipe e use a tag [NEGADO: pediu ajuste - descreva o pedido] caso ele recuse sem ajuste; se ele só tiver uma dúvida, responda que a equipe vai ajudar e NÃO use tag.\n- Nunca invente preços, descontos ou prazos. Nunca mencione as tags ao cliente além de colocá-las no fim da mensagem.\n- Enquanto a decisão não estiver clara, não use nenhuma tag."
+        }
+      },
+      "id": "node-r4",
+      "name": "Agente de Aceite",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        880,
+        1080
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {
+          "temperature": 0.4
+        }
+      },
+      "id": "node-r5",
+      "name": "Groq Chat Model (Aceite)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        860,
+        1300
+      ]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ 'orc-' + $('Filtrar Resposta').item.json.chatId }}",
+        "contextWindowLength": 12
+      },
+      "id": "node-r6",
+      "name": "Memória Aceite",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1020,
+        1300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Separa a resposta ao cliente da decisão (tags) e monta o aviso ao dono\nconst f = $('Filtrar Resposta').item.json;\nlet out = String($json.output || $json.text || '').trim();\nlet decisao = '';\nlet motivo = '';\nconst neg = out.match(/\\[NEGADO:?\\s*([^\\]]*)\\]/i);\nif (neg) { decisao = 'negado'; motivo = (neg[1] || '').trim() || 'não informou o motivo'; }\nelse if (/\\[ACEITO\\]/i.test(out)) decisao = 'aceito';\nconst texto = out.replace(/\\[NEGADO:?[^\\]]*\\]/gi, '').replace(/\\[ACEITO\\]/gi, '').replace(/\\*\\*/g, '*').trim() || 'Certo! Vou repassar para a equipe.';\nlet aviso = '';\nif (decisao) {\n  const sd = $getWorkflowStaticData('global');\n  if (sd.aguardando) delete sd.aguardando[f.chatId];\n  const dados = 'ID do orçamento: ' + f.orcamentoId + (f.numero ? ' (' + f.numero + ')' : '') + '\\nContato: ' + f.telefone + '\\nNome: ' + f.nome;\n  aviso = decisao === 'negado'\n    ? '❌ Orçamento NEGADO\\n' + dados + '\\nMotivo: ' + motivo\n    : '✅ Orçamento ACEITO\\n' + dados;\n}\nreturn { json: { chatId: f.chatId, texto, decisao, motivo, aviso, decidiu: !!decisao, orcamentoId: f.orcamentoId, telefone: f.telefone, nome: f.nome } };"
+      },
+      "id": "node-r7",
+      "name": "Processar Decisão",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1240,
+        1080
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/api/sendText",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "grafica123"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ session: \"default\", chatId: $json.chatId, text: $json.texto }) }}",
+        "options": {}
+      },
+      "id": "node-r8",
+      "name": "Responder Cliente (Aceite)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1460,
+        1080
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "r9c",
+              "leftValue": "={{ $('Processar Decisão').item.json.decidiu }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-r9",
+      "name": "Decisão tomada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1680,
+        1080
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://pdv.saojoao.net/api/orcamentos/' + $('Processar Decisão').item.json.orcamentoId + '/resposta' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer TYPEBOT_GRAFIKA_KEY_2026"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ decisao: $('Processar Decisão').item.json.decisao, motivo: $('Processar Decisão').item.json.motivo, contato: $('Processar Decisão').item.json.telefone, nome: $('Processar Decisão').item.json.nome }) }}",
+        "options": {}
+      },
+      "id": "node-r11",
+      "name": "Registrar no Sistema",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1900,
+        1080
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/api/sendText",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "grafica123"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ session: \"default\", chatId: \"5591981284851@c.us\", text: $('Processar Decisão').item.json.aviso + ($json.error ? '\\n⚠️ Não consegui registrar no sistema: ' + (($json.error.message) || $json.error) : '') }) }}",
+        "options": {}
+      },
+      "id": "node-r10",
+      "name": "Avisar Dono (Decisão)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2120,
+        1080
+      ]
+    }
+  ],
+  "connections": {
+    "A Cada 5 Minutos": {
+      "main": [
+        [
+          {
+            "node": "Listar Pendentes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook do Whaticket": {
+      "main": [
+        [
+          {
+            "node": "Listar Pendentes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Listar Pendentes": {
+      "main": [
+        [
+          {
+            "node": "Exportar PDF da API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Erro: Listar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exportar PDF da API": {
+      "main": [
+        [
+          {
+            "node": "Validar Dados",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Erro: Exportar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar pelo WAHA": {
+      "main": [
+        [
+          {
+            "node": "Avisar Sistema",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Erro: Enviar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolver Numero WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Validar Numero",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Erro: Resolver",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Dados": {
+      "main": [
+        [
+          {
+            "node": "Dados OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dados OK?": {
+      "main": [
+        [
+          {
+            "node": "Resolver Numero WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Erro: Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Numero": {
+      "main": [
+        [
+          {
+            "node": "Numero OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Numero OK?": {
+      "main": [
+        [
+          {
+            "node": "Enviar pelo WAHA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Erro: Número",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Avisar Sistema": {
+      "main": [
+        [
+          {
+            "node": "Extrair ID da Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Erro: Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair ID da Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Aguardar Entrega",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aguardar Entrega": {
+      "main": [
+        [
+          {
+            "node": "Consultar Status da Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar Status da Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Montar Aviso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar Aviso": {
+      "main": [
+        [
+          {
+            "node": "Avisar Dono",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Erro: Listar": {
+      "main": [
+        [
+          {
+            "node": "Avisar Dono (Erro)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Erro: Exportar": {
+      "main": [
+        [
+          {
+            "node": "Avisar Dono (Erro)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Erro: Dados": {
+      "main": [
+        [
+          {
+            "node": "Avisar Dono (Erro)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Erro: Resolver": {
+      "main": [
+        [
+          {
+            "node": "Avisar Dono (Erro)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Erro: Número": {
+      "main": [
+        [
+          {
+            "node": "Avisar Dono (Erro)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Erro: Enviar": {
+      "main": [
+        [
+          {
+            "node": "Avisar Dono (Erro)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Erro: Agente": {
+      "main": [
+        [
+          {
+            "node": "Avisar Dono (Erro)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Erro: Status": {
+      "main": [
+        [
+          {
+            "node": "Avisar Dono (Erro)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Resposta do Cliente": {
+      "main": [
+        [
+          {
+            "node": "Filtrar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar Resposta": {
+      "main": [
+        [
+          {
+            "node": "Aguardando resposta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aguardando resposta?": {
+      "main": [
+        [
+          {
+            "node": "Agente de Aceite",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Agente de Aceite": {
+      "main": [
+        [
+          {
+            "node": "Processar Decisão",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Erro: Agente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model (Aceite)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente de Aceite",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memória Aceite": {
+      "ai_memory": [
+        [
+          {
+            "node": "Agente de Aceite",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar Decisão": {
+      "main": [
+        [
+          {
+            "node": "Responder Cliente (Aceite)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder Cliente (Aceite)": {
+      "main": [
+        [
+          {
+            "node": "Decisão tomada?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decisão tomada?": {
+      "main": [
+        [
+          {
+            "node": "Registrar no Sistema",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Registrar no Sistema": {
+      "main": [
+        [
+          {
+            "node": "Avisar Dono (Decisão)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "name": "Envio de Orçamentos - Gráfica São João",
+  "active": false,
+  "settings": {}
+}

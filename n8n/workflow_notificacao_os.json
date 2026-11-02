@@ -1,0 +1,216 @@
+{
+  "name": "Notificação de Status de OS - Gráfica São João",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "status-os",
+        "options": {}
+      },
+      "id": "node-webhook-os",
+      "name": "Webhook Status OS",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "webhookId": "status-os-webhook"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Extrai e formata dados da Ordem de Serviço enviados pelo backend\nconst item = $json.body || $json;\nconst os = item.os || {};\nconst client = item.client || {};\nconst waha = item.waha || {};\n\nconst chatId = waha.chatId || (client.phoneClean ? client.phoneClean + '@c.us' : null);\nconst text = waha.text || `Olá, *${client.name || 'Cliente'}*!\\nSua OS *${os.osNumber || ''}* teve o status atualizado para: *${os.statusLabel || os.status || 'Atualizada'}*.\\n\\nGráfica São João`;\n\nif (!chatId) {\n  return { json: { ok: false, motivo: 'Cliente sem telefone WhatsApp válido', osNumber: os.osNumber, clientName: client.name } };\n}\n\nreturn {\n  json: {\n    ok: true,\n    chatId,\n    text,\n    osNumber: os.osNumber || 'OS',\n    clientName: client.name || 'Cliente',\n    statusLabel: os.statusLabel || os.status || ''\n  }\n};"
+      },
+      "id": "node-format-dados",
+      "name": "Formatar Dados OS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-ok",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-if-valid",
+      "name": "Dados Válidos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/api/sendText",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "grafica123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ session: 'default', chatId: $json.chatId, text: $json.text }) }}",
+        "options": {}
+      },
+      "id": "node-send-waha",
+      "name": "Enviar WhatsApp (WAHA)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        940,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/api/sendText",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "grafica123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ session: 'default', chatId: '5591981284851@c.us', text: '📢 *Aviso Interno - OS Notificada*\\n\\nCliente: ' + $('Formatar Dados OS').item.json.clientName + '\\nOS: ' + $('Formatar Dados OS').item.json.osNumber + '\\nNovo Status: ' + $('Formatar Dados OS').item.json.statusLabel + '\\nStatus Envio: Enviado com sucesso ✅' }) }}",
+        "options": {}
+      },
+      "id": "node-avisar-dono",
+      "name": "Avisar Dono da Gráfica",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1180,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/api/sendText",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "grafica123"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ session: 'default', chatId: '5591981284851@c.us', text: '⚠️ *Alerta de Notificação de OS*\\nNão foi possível notificar o cliente via WhatsApp.\\nOS: ' + ($json.osNumber || 'N/A') + '\\nCliente: ' + ($json.clientName || 'N/A') + '\\nMotivo: ' + ($json.motivo || 'Erro desconhecido') }) }}",
+        "options": {}
+      },
+      "id": "node-aviso-falha",
+      "name": "Avisar Dono (Falha)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        940,
+        420
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Status OS": {
+      "main": [
+        [
+          {
+            "node": "Formatar Dados OS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar Dados OS": {
+      "main": [
+        [
+          {
+            "node": "Dados Válidos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dados Válidos?": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp (WAHA)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Avisar Dono (Falha)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp (WAHA)": {
+      "main": [
+        [
+          {
+            "node": "Avisar Dono da Gráfica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {}
+}

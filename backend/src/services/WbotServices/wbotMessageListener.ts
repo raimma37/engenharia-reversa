@@ -3675,10 +3675,60 @@ export const handleMessageIntegration = async (
 
   if (queueIntegration.type === "n8n" || queueIntegration.type === "webhook") {
     if (queueIntegration?.urlN8N) {
-      // Adiciona campos da integração ao payload do n8n
+      const rawPhone = (
+        ticket?.contact?.number ||
+        msg?.key?.remoteJid?.split("@")[0] ||
+        ""
+      ).replace(/\D/g, "");
+      const chatIdCUs = rawPhone ? `${rawPhone}@c.us` : msg?.key?.remoteJid || "";
+      const extractedText = getBodyMessage(msg) || "";
+      const isAudio = msgType === "audioMessage";
+      const isMedia = [
+        "imageMessage",
+        "videoMessage",
+        "documentMessage",
+        "documentWithCaptionMessage",
+        "stickerMessage"
+      ].includes(msgType);
+      const mimeType = isAudio
+        ? msg?.message?.audioMessage?.mimetype || "audio/ogg"
+        : msg?.message?.documentMessage?.mimetype ||
+          msg?.message?.documentWithCaptionMessage?.message?.documentMessage?.mimetype ||
+          msg?.message?.imageMessage?.mimetype ||
+          msg?.message?.videoMessage?.mimetype ||
+          "";
+      const fileName =
+        msg?.message?.documentMessage?.fileName ||
+        msg?.message?.documentWithCaptionMessage?.message?.documentMessage?.fileName ||
+        "";
+
+      // Adiciona campos da integração ao payload do n8n + camada de compatibilidade WAHA (budget-system)
       const integrationPayload = {
         ...msg,
+        event: "message",
+        payload: {
+          id: msg?.key?.id,
+          from: msg?.key?.fromMe ? "me@c.us" : chatIdCUs,
+          to: msg?.key?.fromMe ? chatIdCUs : "me@c.us",
+          fromMe: Boolean(msg?.key?.fromMe),
+          body: isAudio ? "" : extractedText === "Áudio" ? "" : extractedText,
+          type: isAudio ? "ptt" : isMedia ? "media" : "chat",
+          hasMedia: Boolean(isAudio || isMedia),
+          media: {
+            mimetype: mimeType,
+            filename: fileName
+          },
+          _data: {
+            type: isAudio ? "ptt" : isMedia ? "media" : "chat",
+            mimetype: mimeType,
+            filename: fileName
+          },
+          ticketId: ticket.id,
+          companyId: ticket.companyId,
+          contactName: ticket?.contact?.name || msg?.pushName || rawPhone
+        },
         _integrationConfig: {
+          integrationId: queueIntegration.id,
           enableTransfer: queueIntegration.enableTransfer,
           transferQueueId: queueIntegration.transferQueueId,
           transferUserId: queueIntegration.transferUserId,
@@ -3696,24 +3746,31 @@ export const handleMessageIntegration = async (
         }
       };
 
-      const options = {
-        method: "POST",
-        url: queueIntegration?.urlN8N,
-        headers: {
-          "Content-Type": "application/json"
-        },
-        json: integrationPayload
-      };
-      try {
-        request(options, function (error, response) {
-          if (error) {
-            throw new Error(error);
-          } else {
-            console.log(response.body);
-          }
-        });
-      } catch (error) {
-        throw new Error(error);
+      const urls = String(queueIntegration.urlN8N)
+        .split(/[,;\s]+/)
+        .map(u => u.trim())
+        .filter(Boolean);
+
+      for (const targetUrl of urls) {
+        const options = {
+          method: "POST",
+          url: targetUrl,
+          headers: {
+            "Content-Type": "application/json"
+          },
+          json: integrationPayload
+        };
+        try {
+          request(options, function (error, response) {
+            if (error) {
+              logger.error(`[N8N-WEBHOOK] Erro ao enviar para ${targetUrl}: ${error.message || error}`);
+            } else {
+              console.log(response.body);
+            }
+          });
+        } catch (error) {
+          logger.error(`[N8N-WEBHOOK] Exceção ao enviar para ${targetUrl}: ${error}`);
+        }
       }
     }
   } else if (queueIntegration.type === "dialogflow") {

@@ -1,0 +1,522 @@
+{
+  "name": "Atendente IA - Gráfica São João",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "grafica-whatsapp",
+        "options": {}
+      },
+      "id": "n-webhook",
+      "name": "Webhook WAHA",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "grafica-whatsapp-ia"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normaliza o evento recebido do Whaticket (Baileys ou camada WAHA) e controla pausa por chat\nconst raw = $input.first().json.body || $input.first().json;\nconst sd = $getWorkflowStaticData('global');\nsd.pausados = sd.pausados || {};\nconst cfg = raw._integrationConfig || {};\nconst p = raw.payload || {};\nconst out = (o) => [{ json: Object.assign({ responder: false, pausado: false, ticketId: cfg.ticketId || p.ticketId || null, integrationId: cfg.integrationId || null }, o) }];\n\n// Suporte a formato nativo Baileys (Whaticket) caso payload WAHA não esteja presente\nconst remoteJid = (raw.key && raw.key.remoteJid) || p.from || '';\nconst fromMe = Boolean((raw.key && raw.key.fromMe) ?? p.fromMe);\nconst ev = raw.event || (raw.key ? 'message' : '');\n\nif (ev === 'call.received') {\n  const chatId = p.from || remoteJid;\n  if (!chatId || String(chatId).includes('@g.us')) return out({});\n  return out({ responder: true, pausado: !!sd.pausados[chatId], chatId, tipo: 'audio', text: '' });\n}\n\nif (ev !== 'message' && ev !== 'message.any') return out({});\nif (String(remoteJid).includes('@g.us') || String(p.to || '').includes('@g.us')) return out({});\nif (String(remoteJid).includes('status@broadcast')) return out({});\n\nconst baileysMsg = raw.message || {};\nconst rawBody = p.body || baileysMsg.conversation || (baileysMsg.extendedTextMessage && baileysMsg.extendedTextMessage.text) || (baileysMsg.imageMessage && baileysMsg.imageMessage.caption) || (baileysMsg.documentMessage && baileysMsg.documentMessage.caption) || '';\n\n// Mensagem enviada pela equipe: comando \"#bot\" reativa o robô\nif (fromMe) {\n  const chat = ( p.to && p.to !== 'me@c.us' ? p.to : remoteJid ).replace('@s.whatsapp.net', '@c.us');\n  const t = String(rawBody).trim().toLowerCase();\n  if (t === '#bot' && chat) delete sd.pausados[chat];\n  if (t === '#pausar' && chat) sd.pausados[chat] = Date.now();\n  return out({});\n}\n\nconst chatId = String(p.from || remoteJid).replace('@s.whatsapp.net', '@c.us');\nconst mime = String((p.media && p.media.mimetype) || (p._data && p._data.mimetype) || (baileysMsg.audioMessage && baileysMsg.audioMessage.mimetype) || '');\nconst tp = String((p._data && p._data.type) || p.type || (baileysMsg.audioMessage ? 'ptt' : ''));\nconst ehAudio = mime.startsWith('audio') || tp === 'ptt' || tp === 'audio' || Boolean(baileysMsg.audioMessage);\nconst bodyTxt = String(rawBody).trim();\nconst hasMedia = Boolean(p.hasMedia || baileysMsg.imageMessage || baileysMsg.documentMessage || baileysMsg.videoMessage);\n\nlet tipo = 'texto';\nlet text = bodyTxt;\nif (ehAudio) { tipo = 'audio'; text = ''; }\nelse if (hasMedia) {\n  tipo = 'arquivo';\n  const nome = (p.media && p.media.filename) || (p._data && p._data.filename) || (baileysMsg.documentMessage && baileysMsg.documentMessage.fileName) || mime || 'arquivo';\n  text = '[Cliente enviou um arquivo/imagem: ' + nome + ']' + (bodyTxt ? ' Legenda: ' + bodyTxt : '');\n}\nif (!text && tipo !== 'audio') return out({});\n\nreturn out({ responder: true, pausado: !!sd.pausados[chatId], chatId, tipo, text });"
+      },
+      "id": "n-filtrar",
+      "name": "Filtrar e Preparar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.responder }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.pausado }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n-deve",
+      "name": "Deve responder?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c3",
+              "leftValue": "={{ $json.tipo }}",
+              "rightValue": "audio",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n-audio",
+      "name": "Áudio ou ligação?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "output",
+              "type": "string",
+              "value": "Poxa, me desculpe! O sistema que usamos aqui no computador da gráfica não consegue abrir áudios ou receber chamadas no momento. Você consegue me mandar por escrito, por favor? 😅"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n-msgaudio",
+      "name": "Resposta Cenário 4",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        900,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "options": {
+          "systemMessage": "=**Identidade e Papel**\nVocê é o assistente virtual da Gráfica São João, localizada em Belém, Pará. Seu objetivo é recepcionar os clientes no WhatsApp com um tom de voz extremamente natural, acolhedor, empático e ágil. Você age como um atendente humano experiente, fazendo a triagem das solicitações antes de passar os dados estruturados para a equipe técnica.\n\n**Diretrizes de Comportamento e Tom de Voz (Regras de Ouro)**\n1. **Proibido Questionários (Q&A):** NUNCA envie listas de perguntas numeradas (ex: \"1. Tamanho, 2. Quantidade\"). Converse em formato de cascata: faça um comentário gentil, faça UMA única pergunta, aguarde a resposta do cliente, e só então faça a próxima pergunta.\n2. **Linguagem Natural:** Use expressões do dia a dia humano, como \"Entendi!\", \"Ah, bacana\", \"Maravilha\", \"Tudo joia?\", \"Só um minutinho\", \"Opa\".\n3. **Escuta Ativa e Auto-Correção:** Se o cliente afirmar que você errou, não entendeu o pedido ou demonstrar frustração, PARE o fluxo normal. Peça desculpas genuínas (ex: \"Opa, me desculpe! Acho que fiz confusão aqui, falha minha.\") e peça para o cliente explicar novamente de forma simples.\n4. **Limites de Conhecimento:** Você não calcula valores finais de serviços sob medida e não inventa prazos. Na dúvida, diga: \"Sabe que me deu uma dúvida agora? Vou confirmar essa informação bem certinha com o pessoal aqui da loja, um momento.\"\n\n**Regras de Triagem e Cenários de Atendimento**\n\n*Cenário 1: Impressões Básicas (Boletos, Trabalhos Escolares, Cópias, Documentos)*\n- Abertura: \"Oi! Tudo bem? Imprimo sim. Pode me mandar o arquivo por aqui mesmo (se tiver em PDF é melhor pra não desconfigurar nada, tá?).\"\n- Assim que o cliente enviar, pergunte: \"Recebi aqui! Vai ser colorido ou preto e branco?\"\n- Após a resposta, pergunte a quantidade de cópias.\n- Finalização: Confirme que o material vai entrar na fila de impressão e avise que logo estará pronto para retirada.\n\n*Cenário 2: Orçamentos (Adesivos, Banners, Cartões de Visita, Tags, Etiquetas)*\n- Abertura: \"Olá! Tudo joia? Faço esse orçamento pra você sim. Me conta, você já tem a arte pronta para esse material ou vai precisar que a gente monte a arte pra você?\"\n- Após a resposta, pergunte de forma suave: \"Legal, entendi. E qual seria a quantidade e o tamanho aproximado que você precisa?\"\n- Finalização (Transbordo): Quando coletar o serviço, tamanho, quantidade e status da arte, finalize: \"Perfeito, já anotei todos os detalhes! Vou passar pro nosso especialista calcular o valor certinho e ele já assume o atendimento aqui pra te passar, tá bem?\"\n- [AÇÃO DE SISTEMA]: Após essa mensagem, adicione a tag interna <AGUARDANDO_HUMANO> no final da sua resposta para que o sistema (n8n/Kanban) pause o bot e alerte a equipe.\n\n*Cenário 3: Formatação de Currículos*\n- Se o cliente pedir para fazer ou digitar um currículo, explique o novo processo digital: \"Ah, sobre os currículos, nós atualizamos nosso sistema e não fazemos mais a digitação manual presencial. É bem mais rápido agora: você só precisa preencher seus dados direto neste link [INSERIR_LINK_DO_FORMULARIO] e ele já gera o currículo formatado em PDF certinho!\"\n\n*Cenário 4: Tentativa de Envio de Áudio ou Ligação*\n- Caso o sistema identifique que o cliente enviou um áudio ou tentou ligar, responda: \"Poxa, me desculpe! O sistema que usamos aqui no computador da gráfica não consegue abrir áudios ou receber chamadas no momento. Você consegue me mandar por escrito, por favor? 😅\"\n\n**Base de Conhecimento Institucional**\n- Localização: [Inserir Endereço Completo em Belém - PA].\n- Horário de Funcionamento: [Inserir Horário Normal]. Observação estrita: A gráfica é fechada no último domingo de cada mês.\n- Atuação: Somos exclusivamente uma gráfica rápida e comercial. Não vendemos peças automotivas, eletrônicos ou serviços fora do ramo gráfico.\n\n**Observações técnicas**\n- Mensagens entre colchetes iniciadas por \"[Cliente enviou ...\" são avisos do sistema indicando que o cliente mandou um arquivo/imagem; trate como o recebimento do arquivo.\n- Escreva mensagens curtas, como no WhatsApp. Nunca use listas numeradas nem markdown (sem **negrito**). Faça só UMA pergunta por mensagem.\n- Nunca mencione a tag <AGUARDANDO_HUMANO> ao cliente além de colocá-la no final da mensagem de transbordo.\n- Data e hora atuais (Belém): {{ $now.setZone('America/Belem').toFormat(\"cccc, dd/MM/yyyy HH:mm\") }}. Use para avisar se o cliente perguntar sobre abrir no último domingo do mês."
+        }
+      },
+      "id": "n-agent",
+      "name": "Atendente IA",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        900,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "n-llm",
+      "name": "Groq Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        880,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Filtrar e Preparar').item.json.chatId }}",
+        "contextWindowLength": 20
+      },
+      "id": "n-mem",
+      "name": "Memória da Conversa",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1040,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Detecta o transbordo, pausa o bot para o chat e limpa a resposta\nconst sd = $getWorkflowStaticData('global');\nsd.pausados = sd.pausados || {};\nconst prep = $('Filtrar e Preparar').first().json;\nconst chatId = prep.chatId;\nconst ticketId = prep.ticketId || null;\nconst integrationId = prep.integrationId || null;\nlet texto = String($json.output || $json.text || '').trim();\nconst transbordo = texto.includes('<AGUARDANDO_HUMANO>');\ntexto = texto.replace(/<AGUARDANDO_HUMANO>/g, '').replace(/\\*\\*/g, '*').trim();\nif (transbordo) sd.pausados[chatId] = Date.now();\nreturn [{ json: { chatId, texto, transbordo, ticketId, integrationId } }];"
+      },
+      "id": "n-proc",
+      "name": "Processar Resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/api/sendSeen",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "grafica123"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ session: \"default\", chatId: $json.chatId, ticketId: $json.ticketId }) }}",
+        "options": {}
+      },
+      "id": "n-seen",
+      "name": "Marcar como lida",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1480,
+        300
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/api/startTyping",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "grafica123"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ session: \"default\", chatId: $(\"Processar Resposta\").item.json.chatId }) }}",
+        "options": {}
+      },
+      "id": "n-typing",
+      "name": "Digitando...",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1700,
+        300
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.min(9, Math.max(3, Math.round($('Processar Resposta').item.json.texto.length / 22))) + Math.random() * 2 }}",
+        "unit": "seconds"
+      },
+      "id": "n-wait",
+      "name": "Pausa Humana",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1920,
+        300
+      ],
+      "webhookId": "grafica-wait-typing"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/api/sendText",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "grafica123"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ session: \"default\", chatId: $('Processar Resposta').item.json.chatId, text: $('Processar Resposta').item.json.texto, ticketId: $('Processar Resposta').item.json.ticketId, integrationId: $('Processar Resposta').item.json.integrationId, transbordo: $('Processar Resposta').item.json.transbordo }) }}",
+        "options": {}
+      },
+      "id": "n-send",
+      "name": "Enviar pelo WAHA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2140,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c-transbordo",
+              "leftValue": "={{ $('Processar Resposta').item.json.transbordo && Boolean($('Processar Resposta').item.json.ticketId) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n-if-transbordo",
+      "name": "Transbordo Humano?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2360,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/n8n-callback",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ action: \"transfer\", ticketId: $('Processar Resposta').item.json.ticketId, integrationId: $('Processar Resposta').item.json.integrationId, token: \"grafica123\", useIntegrationConfig: true }) }}",
+        "options": {}
+      },
+      "id": "n-callback-whaticket",
+      "name": "Transferir Fila Whaticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2580,
+        220
+      ],
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Webhook WAHA": {
+      "main": [
+        [
+          {
+            "node": "Filtrar e Preparar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar e Preparar": {
+      "main": [
+        [
+          {
+            "node": "Deve responder?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deve responder?": {
+      "main": [
+        [
+          {
+            "node": "Áudio ou ligação?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Áudio ou ligação?": {
+      "main": [
+        [
+          {
+            "node": "Resposta Cenário 4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Atendente IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resposta Cenário 4": {
+      "main": [
+        [
+          {
+            "node": "Processar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atendente IA": {
+      "main": [
+        [
+          {
+            "node": "Processar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Atendente IA",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memória da Conversa": {
+      "ai_memory": [
+        [
+          {
+            "node": "Atendente IA",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar Resposta": {
+      "main": [
+        [
+          {
+            "node": "Marcar como lida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar como lida": {
+      "main": [
+        [
+          {
+            "node": "Digitando...",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Digitando...": {
+      "main": [
+        [
+          {
+            "node": "Pausa Humana",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pausa Humana": {
+      "main": [
+        [
+          {
+            "node": "Enviar pelo WAHA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar pelo WAHA": {
+      "main": [
+        [
+          {
+            "node": "Transbordo Humano?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transbordo Humano?": {
+      "main": [
+        [
+          {
+            "node": "Transferir Fila Whaticket",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
