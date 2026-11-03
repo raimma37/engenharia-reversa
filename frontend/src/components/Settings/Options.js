@@ -1955,7 +1955,7 @@ export default function Options(props) {
               rows={3}
               label={i18n.t("settings.settings.customMessages.AcceptCallWhatsappMessage")}
               variant="outlined"
-              required={AcceptCallWhatsapp === "disabled"}
+              required={AcceptCallWhatsapp === "enabled"}
               value={AcceptCallWhatsappMessage}
               onChange={async (e) => {
                 handleAcceptCallWhatsappMessage(e.target.value);

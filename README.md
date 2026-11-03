@@ -57,24 +57,27 @@ Os 3 workflows prontos do n8n estão na pasta [`./n8n/`](./n8n):
 4. Caso o seu sistema `print-shop-budget-system` esteja rodando localmente (ex.: `http://localhost:3001` em vez de `https://pdv.saojoao.net`), ajuste a URL nos nós HTTP `"Listar Pendentes"`, `"Exportar PDF da API"`, `"Avisar Sistema"` e `"Registrar no Sistema"` do `workflow_orcamento.json`.
 5. **Ative** os 3 workflows no n8n.
 
-### Passo 2: Configurar a Conexão e Fila no Painel do Whaticket (`http://localhost:3000`)
-1. **Criar Filas:**
-   - Vá em **Filas & Chatbot** $\rightarrow$ crie uma fila para a **Triagem IA** (ex.: `Triagem Bot`) e uma fila para o **Atendimento Humano / Orçamentista** (ex.: `Comercial / Orçamentos`).
-2. **Criar a Integração n8n:**
-   - Vá em **Integrações** $\rightarrow$ **Adicionar Integração**:
-     - **Tipo:** `n8n` (ou `WebHooks`)
-     - **Nome:** `n8n Gráfica São João`
-     - **URL do n8n (`urlN8N`):** Informe as URLs de webhook dos fluxos de entrada separadas por vírgula:
-       ```text
-       http://localhost:5678/webhook/grafica-whatsapp, http://localhost:5678/webhook/orcamento-resposta
-       ```
-       *(O backend do Whaticket dispara automaticamente para todas as URLs listadas nesse campo separadas por `,` ou `;`).*
-     - **Habilitar Transferência (`enableTransfer`):** Marque como **Ativo** e selecione a fila **Comercial / Orçamentos** (e opcionalmente um atendente responsável).
-3. **Vincular à Conexão WhatsApp:**
-   - Vá em **Conexões** $\rightarrow$ adicione ou edite sua conexão WhatsApp:
-     - Vincule a fila `Triagem Bot` e selecione a integração `n8n Gráfica São João`.
-     - *(Opcional)* No campo **Token**, você pode definir `grafica123` (ou qualquer token de sua preferência). Caso não defina, o backend faz fallback automático para a conexão padrão da empresa 1.
-   - Leia o QR Code pelo WhatsApp para deixar a conexão com status **CONECTADO**.
+### Passo 2: Configurações Já Pré-Cadastradas no Whaticket (`http://localhost:3000`)
+O banco de dados local já está pré-configurado para uso individual da **Gráfica São João**:
+1. **Filas (`Queues`) já criadas e vinculadas ao seu usuário `Admin`:**
+   - `1` — **Triagem Bot** (`#2563EB`): fila de entrada vinculada à integração n8n.
+   - `2` — **Comercial / Orçamentos** (`#D97706`): fila humana para onde a IA transfere orçamentos sob medida e atendimentos humanos.
+   - `3` — **Impressões Rápidas** (`#16A34A`): fila humana para onde a IA transfere pedidos de impressões comuns após coletar o arquivo, cor (P&B/colorido) e cópias.
+2. **Etiquetas de Classificação da Triagem (`Tags` + Kanban) já criadas:**
+   - **`Atendimento Humano`** (`#DC2626` - Vermelho): aplicada automaticamente (`<TAG_HUMANO>`) quando a IA não sabe uma informação, não está compreendendo o cliente ou evita ficar repetitiva.
+   - **`Impressões Comuns`** (`#2563EB` - Azul): aplicada automaticamente (`<TAG_IMPRESSAO>`) quando a IA conclui a triagem de impressões básicas (boletos, trabalhos, cópias, documentos).
+   - **`Orçamentos`** (`#D97706` - Âmbar): aplicada automaticamente (`<AGUARDANDO_HUMANO>`) quando a IA coleta todos os dados do orçamento sob medida e registra a solicitação no **Painel de Avisos** do `print-shop-budget-system`.
+   - **`Orçamento Enviado`** (`#0284C7` - Azul Claro): aplicada automaticamente quando o PDF do orçamento é enviado ao cliente via `/api/sendFile`.
+   - **`Orçamento Aprovado`** (`#16A34A` - Verde): aplicada automaticamente quando o cliente aprova o orçamento (`[ACEITO]`).
+3. **Integração n8n (`n8n Gráfica São João`) já cadastrada:**
+   - **URL do n8n (`urlN8N`):**
+     ```text
+     http://localhost:5678/webhook/grafica-whatsapp, http://localhost:5678/webhook/orcamento-resposta
+     ```
+   - **Transferência Automática (`enableTransfer`):** Ativa para a fila **Comercial / Orçamentos** (`queueId: 2`) e usuário **Admin** (`userId: 1`).
+4. **Conexão WhatsApp (`Gráfica São João`) já criada:**
+   - **Token:** `grafica123` (padrão `isDefault: true`, vinculada à fila `Triagem Bot` e à integração `n8n Gráfica São João`).
+   - Basta acessar **Conexões** em `http://localhost:3000` e ler o **QR Code** com o seu WhatsApp.
 
 ### Passo 3: Configurar o `.env` do `print-shop-budget-system`
 No arquivo `.env` do projeto `print-shop-budget-system` (ou nas Configurações do Sistema), aponte o webhook de OS para o n8n:

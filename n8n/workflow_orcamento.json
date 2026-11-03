@@ -637,7 +637,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ session: \"default\", chatId: $json.chatId, text: $json.texto }) }}",
+        "jsonBody": "={{ JSON.stringify({ session: \"default\", chatId: $json.chatId, text: $json.texto, tag: $json.decisao === 'aceito' ? 'Orçamento Aprovado' : '' }) }}",
         "options": {}
       },
       "id": "node-r8",

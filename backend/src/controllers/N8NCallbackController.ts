@@ -9,6 +9,7 @@ import {
   handleIntegrationOpenTicket
 } from "../services/IntegrationServices/IntegrationActionsService";
 import { getIO } from "../libs/socket";
+import { applyTriageTagToTicket } from "./WahaCompatController";
 import logger from "../utils/logger";
 import AppError from "../errors/AppError";
 
@@ -43,7 +44,7 @@ export const n8nCallback = async (req: Request, res: Response): Promise<Response
       status,
       message,
       useIntegrationConfig,
-      integrationId
+      integrationId, tag, tagName
     } = req.body;
 
     // Validação básica
@@ -80,6 +81,13 @@ export const n8nCallback = async (req: Request, res: Response): Promise<Response
     }
 
     const io = getIO();
+    const resolvedTag = tag || tagName;
+    if (resolvedTag) {
+      await applyTriageTagToTicket(ticket, String(resolvedTag));
+    }
+    if (action === "tag") {
+      return res.status(200).json({ success: true, action: "tag", ticketId, tag: resolvedTag });
+    }
 
     switch (action) {
       case "transfer": {

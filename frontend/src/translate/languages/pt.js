@@ -1752,7 +1752,7 @@ const messages = {
             chatBotType: "Tipo do Bot",
             userRandom: "Escolher atendente aleatório",
             buttons: "Botões",
-            acceptCallWhatsapp: "Informar que não aceita ligação no whatsapp?",
+            acceptCallWhatsapp: "Recusar ligações e avisar que não aceita no WhatsApp?",
             sendSignMessage: "Permite atendente escolher ENVIAR Assinatura",
             sendGreetingMessageOneQueues:
               "Enviar saudação quando houver somente 1 fila",

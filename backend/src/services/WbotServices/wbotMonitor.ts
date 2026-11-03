@@ -1,3 +1,4 @@
+import axios from "axios";
 import {
   WASocket,
   BinaryNode,
@@ -6,11 +7,21 @@ import {
   isJidStatusBroadcast,
   proto,
   extractMessageContent,
-  getContentType,
+  getContentType
 } from "@whiskeysockets/baileys";
 import { handleLabelsEdit, handleLabelsAssociation } from "../TagServices/WhatsAppLabelSyncService";
 import * as Sentry from "@sentry/node";
 import fs from "fs";
+
+interface BaileysCallEvent {
+  chatId?: string;
+  from: string;
+  id: string;
+  date?: Date;
+  isVideo?: boolean;
+  status: string;
+  isGroup?: boolean;
+}
 
 import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
@@ -19,6 +30,9 @@ import Message from "../../models/Message";
 import logger from "../../utils/logger";
 import createOrUpdateBaileysService from "../BaileysServices/CreateOrUpdateBaileysService";
 import CreateMessageService from "../MessageServices/CreateMessageService";
+import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
+import ShowQueueIntegrationService from "../QueueIntegrationServices/ShowQueueIntegrationService";
+import QueueIntegrations from "../../models/QueueIntegrations";
 import CompaniesSettings from "../../models/CompaniesSettings";
 import path from "path";
 import { verifyMessage, getBodyMessage, getTypeMessage } from "./wbotMessageListener";
@@ -61,86 +75,250 @@ const wbotMonitor = async (
   companyId: number
 ): Promise<void> => {
   try {
-    wbot.ws.on("CB:call", async (node: BinaryNode) => {
-      const content = node.content[0] as any;
+    // Cache de chamadas processadas para evitar processamento duplicado (TTL: 60s)
+    const processedCalls = new Set<string>();
+    const markCallProcessed = (callId: string) => {
+      processedCalls.add(callId);
+      setTimeout(() => {
+        processedCalls.delete(callId);
+      }, 60000);
+    };
 
-      await new Promise(r => setTimeout(r, callCounter * 650));
-      callCounter++;
+    const handleIncomingCall = async (call: {
+      id: string;
+      from: string;
+      status: string;
+      isVideo?: boolean;
+      isGroup?: boolean;
+    }) => {
+      if (!call.from || call.from.includes("@g.us") || call.from.includes("@call")) {
+        return;
+      }
 
-      if (content.tag === "terminate" && !node.attrs.from.includes('@call')) {
-        const settings = await CompaniesSettings.findOne({
-          where: { companyId },
+      if (processedCalls.has(call.id)) {
+        return;
+      }
+      markCallProcessed(call.id);
+
+      logger.info(
+        `[WBOT CALL] Evento de chamada recebido na conexão ${whatsapp.id}: id=${call.id}, from=${call.from}, status=${call.status}, isVideo=${call.isVideo}`
+      );
+
+      const settings = await CompaniesSettings.findOne({
+        where: { companyId },
+      });
+
+      if (!settings) return;
+
+      // Se a empresa optou por não aceitar chamadas ("enabled" na UI de rejeição de chamadas)
+      const rejectEnabled = settings.acceptCallWhatsapp === "enabled";
+
+      if (!rejectEnabled) {
+        logger.info(`[WBOT CALL] Conexão ${whatsapp.id} aceita chamadas normalmente.`);
+        return;
+      }
+
+      // 1. REJEITAR A LIGAÇÃO NO WHATSAPP IMEDIATAMENTE (desliga no aparelho do cliente)
+      try {
+        if (typeof (wbot as any).rejectCall === "function") {
+          await (wbot as any).rejectCall(call.id, call.from);
+          logger.info(`[WBOT CALL] ✅ Chamada ${call.id} de ${call.from} desligada com sucesso via rejectCall.`);
+        }
+      } catch (rejectErr: any) {
+        logger.error(`[WBOT CALL] Falha ao rejeitar chamada ${call.id}: ${rejectErr?.message || rejectErr}`);
+      }
+
+      // 2. OBTER OU CRIAR CONTATO E TICKET
+      const rawNumber = call.from.split("@")[0].split(":")[0].replace(/\D/g, "");
+      let contact = await Contact.findOne({
+        where: { companyId, number: rawNumber },
+      });
+
+      if (!contact) {
+        contact = await CreateOrUpdateContactService({
+          name: rawNumber,
+          number: rawNumber,
+          isGroup: Boolean(call.isGroup),
+          companyId
         });
+      }
 
-        if (!settings) return;
+      const [ticket] = await Ticket.findOrCreate({
+        where: {
+          contactId: contact.id,
+          whatsappId: whatsapp.id,
+          status: ["open", "pending", "nps", "lgpd"],
+          companyId
+        },
+        defaults: {
+          companyId,
+          contactId: contact.id,
+          whatsappId: whatsapp.id,
+          isGroup: Boolean(call.isGroup),
+          status: "pending"
+        }
+      });
 
-        if (settings.acceptCallWhatsapp === "enabled") {
-          const sentMessage = await wbot.sendMessage(node.attrs.from, {
-            text:
-              `\u200e ${settings.AcceptCallWhatsappMessage}`,
-            // text:
-            // "\u200e *Mensagem Automática:*\n\nAs chamadas de voz e vídeo estão desabilitadas para esse WhatsApp, favor enviar uma mensagem de texto. Obrigado",              
-          });
-          const number = node.attrs.from.split(":")[0].replace(/\D/g, "");
+      if (!ticket) return;
 
-          const contact = await Contact.findOne({
-            where: { companyId, number },
-          });
+      // 3. REGISTRAR O LOG DA CHAMADA NO CHAT/TICKET
+      const date = new Date();
+      const hours = String(date.getHours()).padStart(2, "0");
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+      const callType = call.isVideo ? "vídeo" : "voz";
+      const callLogBody = `Chamada de ${callType} recusada às ${hours}:${minutes}`;
 
-          if (!contact)
-            return
-
-          const [ticket] = await Ticket.findOrCreate({
-            where: {
-              contactId: contact.id,
-              whatsappId: wbot.id,
-              status: ["open", "pending", "nps", "lgpd"],
-              companyId
-            },
-            defaults: {
-              companyId,
-              contactId: contact.id,
-              whatsappId: wbot.id,
-              isGroup: contact.isGroup,
-              status: "pending"
-            }
-          });
-
-          //se não existir o ticket não faz nada.
-          if (!ticket) return;
-
-          await verifyMessage(sentMessage, ticket, contact);
-
-          const date = new Date();
-          const hours = date.getHours();
-          const minutes = date.getMinutes();
-
-          const body = `Chamada de voz/vídeo perdida às ${hours}:${minutes}`;
-          const messageData = {
-            wid: content.attrs["call-id"],
+      try {
+        await CreateMessageService({
+          messageData: {
+            wid: call.id,
             ticketId: ticket.id,
             contactId: contact.id,
-            body,
+            body: callLogBody,
             fromMe: false,
             mediaType: "call_log",
             read: true,
-            quotedMsgId: null,
             ack: 1,
-          };
+          },
+          companyId
+        });
 
-          await ticket.update({
-            lastMessage: body,
-          });
+        await ticket.update({
+          lastMessage: callLogBody,
+          ...(ticket.status === "closed" ? { status: "pending" } : {})
+        });
+      } catch (logErr: any) {
+        logger.error(`[WBOT CALL] Erro ao registrar log da chamada no ticket: ${logErr?.message || logErr}`);
+      }
 
+      // 4. REGRA DE NÃO CONFLITO COM O N8N:
+      // Verifica se o ticket ou a conexão possui integração com n8n ativa
+      let integrationId = ticket.integrationId || whatsapp.integrationId;
+      let queueIntegration: QueueIntegrations | null = null;
 
-          if (ticket.status === "closed") {
-            await ticket.update({
-              status: "pending",
-            });
-          }
-
-          return CreateMessageService({ messageData, companyId: companyId });
+      if (integrationId) {
+        try {
+          queueIntegration = await ShowQueueIntegrationService(integrationId, companyId);
+        } catch (intErr: any) {
+          logger.warn(`[WBOT CALL] Integração ${integrationId} não localizada: ${intErr?.message || intErr}`);
         }
+      }
+
+      const isN8nActive =
+        Boolean(queueIntegration?.urlN8N) &&
+        (queueIntegration?.type === "n8n" || queueIntegration?.type === "webhook") &&
+        !contact.disableBot &&
+        !ticket.isGroup &&
+        !ticket.userId &&
+        ticket.status !== "open" &&
+        ticket.isBot !== false;
+
+      if (isN8nActive && queueIntegration?.urlN8N) {
+        // Envia evento call.received para o n8n.
+        // O n8n responderá via Cenário 4 com tom humanizado ("Poxa, me desculpe! O sistema não aceita chamadas...").
+        // O Whaticket NÃO envia mensagem direta para evitar conflito/duplicação.
+        logger.info(`[WBOT CALL] Notificando n8n (call.received) para ticket ${ticket.id} — resposta delegada à IA`);
+
+        const urls = String(queueIntegration.urlN8N)
+          .split(/[,;\s]+/)
+          .map(u => u.trim())
+          .filter(Boolean);
+
+        const n8nPayload = {
+          event: "call.received",
+          key: {
+            remoteJid: `${rawNumber}@s.whatsapp.net`,
+            fromMe: false,
+            id: call.id
+          },
+          payload: {
+            id: call.id,
+            from: `${rawNumber}@c.us`,
+            to: "me@c.us",
+            fromMe: false,
+            body: "",
+            type: "call",
+            hasMedia: false,
+            ticketId: ticket.id,
+            companyId: ticket.companyId,
+            contactName: contact.name || rawNumber
+          },
+          _integrationConfig: {
+            integrationId: queueIntegration.id,
+            enableTransfer: queueIntegration.enableTransfer,
+            transferQueueId: queueIntegration.transferQueueId,
+            transferUserId: queueIntegration.transferUserId,
+            ticketId: ticket.id,
+            companyId: ticket.companyId
+          }
+        };
+
+        for (const targetUrl of urls) {
+          try {
+            axios.post(targetUrl, n8nPayload, {
+              headers: { "Content-Type": "application/json" },
+              timeout: 10000
+            }).catch(axiosErr => {
+              logger.error(`[WBOT CALL] Erro assíncrono ao notificar n8n (${targetUrl}): ${axiosErr?.message || axiosErr}`);
+            });
+          } catch (n8nErr: any) {
+            logger.error(`[WBOT CALL] Falha ao disparar para n8n (${targetUrl}): ${n8nErr?.message || n8nErr}`);
+          }
+        }
+      } else {
+        // SEM N8N ATIVO (atendimento humano, bot desligado ou sem n8n):
+        // Envia mensagem direta do Whaticket com o texto configurado ou fallback padrão
+        const defaultMsg = "*Mensagem Automática:*\n\nAs chamadas de voz e vídeo estão desabilitadas para esse WhatsApp, favor enviar uma mensagem de texto. Obrigado";
+        const textToSend = settings.AcceptCallWhatsappMessage?.trim() || defaultMsg;
+
+        logger.info(`[WBOT CALL] Enviando mensagem de recusa nativa do Whaticket para ${call.from}`);
+
+        try {
+          const sentMessage = await wbot.sendMessage(call.from, {
+            text: `\u200e ${textToSend}`
+          });
+          await verifyMessage(sentMessage, ticket, contact);
+        } catch (msgErr: any) {
+          logger.error(`[WBOT CALL] Erro ao enviar mensagem de aviso de chamada para ${call.from}: ${msgErr?.message || msgErr}`);
+        }
+      }
+    };
+
+    // ✅ Baileys v7: Evento oficial de chamada 'call'
+    wbot.ev.on("call" as any, async (callEvents: BaileysCallEvent[]) => {
+      try {
+        for (const call of callEvents) {
+          await handleIncomingCall({
+            id: call.id,
+            from: call.from || call.chatId,
+            status: call.status,
+            isVideo: call.isVideo,
+            isGroup: call.isGroup
+          });
+        }
+      } catch (err: any) {
+        logger.error(`[WBOT CALL] Erro no listener ev.on('call'): ${err?.message || err}`);
+      }
+    });
+
+    // Fallback: Evento 'CB:call' em caso de stanzas brutas não capturadas
+    wbot.ws.on("CB:call", async (node: BinaryNode) => {
+      try {
+        const content = node.content[0] as any;
+        if (!content) return;
+        const callId = content.attrs?.["call-id"] || node.attrs?.id || `call_${Date.now()}`;
+        const from = node.attrs?.from;
+        if (!from) return;
+
+        await handleIncomingCall({
+          id: callId,
+          from,
+          status: content.tag || "offer",
+          isVideo: false,
+          isGroup: from.includes("@g.us")
+        });
+      } catch (err: any) {
+        logger.error(`[WBOT CALL] Erro no listener ws.on('CB:call'): ${err?.message || err}`);
       }
     });
 

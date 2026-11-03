@@ -5655,6 +5655,73 @@ const handleMessage = async (
       await handleOpenAi(msg, wbot, ticket, contact, mediaSent, ticketTraking);
     }
 
+    // Comandos manuais #pausar e #bot enviados pelo atendente (fromMe = true) + escuta de resposta de orçamento em PDF
+    if (!ticket.imported && !ticket.isGroup) {
+      const targetIntId = ticket.integrationId || whatsapp.integrationId;
+      if (msg.key.fromMe && targetIntId) {
+        const cleanCmd = String(getBodyMessage(msg) || "")
+          .replace(/^\*[^*]+:\*\s*/i, "")
+          .trim()
+          .toLowerCase();
+        if (cleanCmd === "#pausar" || cleanCmd === "#bot") {
+          try {
+            const integrations = await ShowQueueIntegrationService(targetIntId, companyId);
+            await handleMessageIntegration(msg, wbot, companyId, integrations, ticket);
+            if (cleanCmd === "#pausar") {
+              await ticket.update({
+                isBot: false,
+                useIntegration: false,
+                status: "open",
+                userId: ticket.userId || 1,
+                queueId: ticket.queueId || integrations.transferQueueId || 2
+              });
+            } else if (cleanCmd === "#bot") {
+              await ticket.update({
+                isBot: true,
+                useIntegration: true,
+                integrationId: integrations.id,
+                status: "pending",
+                userId: null,
+                queueId: whatsapp.queues?.[0]?.id || 1
+              });
+            }
+          } catch (cmdErr) {
+            logger.error(`[N8N CMD] Erro ao processar comando ${cleanCmd}: ${cmdErr}`);
+          }
+          return;
+        }
+      }
+
+      // Se o ticket já foi transferido para humano (status === "open" ou userId definido),
+      // mas recebeu um PDF de orçamento ou a integração possui webhook de orcamento-resposta,
+      // encaminha para o webhook de resposta de orçamento do n8n sem reativar a triagem geral
+      if (
+        !msg.key.fromMe &&
+        targetIntId &&
+        (ticket.status === "open" || ticket.userId || !ticket.useIntegration)
+      ) {
+        try {
+          const integrations = await ShowQueueIntegrationService(targetIntId, companyId);
+          if (
+            integrations?.urlN8N &&
+            String(integrations.urlN8N).includes("orcamento-resposta")
+          ) {
+            const orcOnlyIntegration = {
+              ...(integrations.toJSON ? integrations.toJSON() : integrations),
+              urlN8N: String(integrations.urlN8N)
+                .split(/[,;\s]+/)
+                .map(u => u.trim())
+                .filter(u => u.includes("orcamento-resposta"))
+                .join(", ")
+            } as any;
+            if (orcOnlyIntegration.urlN8N) {
+              await handleMessageIntegration(msg, wbot, companyId, orcOnlyIntegration, ticket);
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
     //integraçao na conexao
     if (
       ticket.status !== "open" &&
